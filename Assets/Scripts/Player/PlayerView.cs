@@ -21,5 +21,14 @@ namespace BombIt.Presentation
         {
             transform.position = player.position;
         }
+
+        public void SetDead()
+        {
+            var sr = GetComponent<SpriteRenderer>();
+            if (sr != null)
+            {
+                sr.color = Color.gray;
+            }
+        }
     }
 }

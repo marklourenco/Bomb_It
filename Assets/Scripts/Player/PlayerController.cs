@@ -5,20 +5,22 @@ using BombIt.Presentation;
 
 public class PlayerController : MonoBehaviour
 {
-    [SerializeField] private float moveSpeed = 4.0f;
     [SerializeField] private float collisionRadius = 0.35f;
     private GridMap grid;
+    private BombSimulation bombs;
     private PlayerState state;
     private PlayerView view;
     private Vector2 inputDirection;
+    private bool wasAlive = true;
 
-    public void Build(GridMap gridMap, Vector2 spawnPosition)
+    public void Build(GridMap gridMap, BombSimulation bombSimulation, Vector2 spawnPosition, int ownerId)
     {
         grid = gridMap;
+        bombs = bombSimulation;
         state = new PlayerState
         {
+            id = ownerId,
             position = spawnPosition,
-            moveSpeed = moveSpeed,
             collisionRadius = collisionRadius
         };
         view = gameObject.AddComponent<PlayerView>();
@@ -26,16 +28,44 @@ public class PlayerController : MonoBehaviour
         view.SyncTo(state);
     }
 
+    public PlayerState GetState()
+    {
+        return state;
+    }
+
     void Update()
     {
         float horizontal = Input.GetAxisRaw("Horizontal");
         float vertical = Input.GetAxisRaw("Vertical");
         inputDirection = new Vector2(horizontal, vertical);
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            TryPlaceBomb();
+        }
     }
 
-    void FixedUpdate()
+    public void Tick(float deltaTime)
     {
-        PlayerMotor.Move(state, grid, inputDirection, Time.fixedDeltaTime);
+        if (!state.alive)
+        {
+            if (wasAlive)
+            {
+                view.SetDead();
+                wasAlive = false;
+            }
+            return;
+        }
+        PlayerMotor.Move(state, grid, bombs, inputDirection, deltaTime);
         view.SyncTo(state);
+    }
+
+    private void TryPlaceBomb()
+    {
+        if (!state.alive)
+        {
+            return;
+        }
+        var cell = GridMap.WorldToGrid(state.position);
+        bombs.TryPlaceBomb(state.id, cell, state.GetBombRange(), state.GetMaxBombs());
     }
 }

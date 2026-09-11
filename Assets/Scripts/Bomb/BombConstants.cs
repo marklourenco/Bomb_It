@@ -1,9 +1,14 @@
 using UnityEngine;
 
-public class BombConstants : MonoBehaviour
+namespace BombIt.Simulation
 {
-    public int bombId;
-    public int range;
-    public float fuseTimer;
+    public static class BombConstants
+    {
+        public const float fuseDuration = 2.0f;
+        public const float explosionDuration = 0.4f;
+        public const int baseRange = 1;
+        public const int baseBombCount = 1;
+        public const float upgradeDropChance = 0.35f;
 
+    }
 }

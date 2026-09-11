@@ -1,6 +1,7 @@
 using UnityEngine;
 using BombIt.Simulation;
 using BombIt.Presentation;
+using System.Collections.Generic;
 
 public class GameBootstrap : MonoBehaviour
 {
@@ -14,6 +15,10 @@ public class GameBootstrap : MonoBehaviour
     private GridView gridView;
     private PlayerController player;
 
+    private BombSimulation bombSimulation;
+    private BombFieldView bombFieldView;
+    private readonly List<PlayerState> players = new List<PlayerState>();
+
     void Start()
     {
         grid = new GridMap();
@@ -23,6 +28,10 @@ public class GameBootstrap : MonoBehaviour
         gridView = viewGO.AddComponent<GridView>();
         gridView.Build(grid);
 
+        bombSimulation = new BombSimulation(grid);
+        var bombFieldGO = new GameObject("Bomb Field View");
+        bombFieldView = bombFieldGO.AddComponent<BombFieldView>();
+
         SpawnPlayer();
         FitCameraToGrid();
     }
@@ -31,7 +40,23 @@ public class GameBootstrap : MonoBehaviour
     {
         var playerGO = new GameObject("Player");
         player = playerGO.AddComponent<PlayerController>();
-        player.Build(grid, GridMap.GridToWorldCenter(1, 1));
+        player.Build(grid, bombSimulation, GridMap.GridToWorldCenter(1, 1), 0);
+        players.Add(player.GetState());
+    }
+
+    void FixedUpdate()
+    {
+        if (player == null)
+        {
+            return;
+        }
+        player.Tick(Time.fixedDeltaTime);
+        bool gridChanged = bombSimulation.Tick(Time.fixedDeltaTime, players);
+        bombFieldView.Sync(bombSimulation);
+        if (gridChanged)
+        {
+            gridView.Refresh(grid);
+        }
     }
 
     private void FitCameraToGrid()
