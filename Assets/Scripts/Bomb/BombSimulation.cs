@@ -11,27 +11,24 @@ namespace BombIt.Simulation
         private readonly List<ExplosionCellState> explosions = new List<ExplosionCellState>();
         private readonly List<UpgradePickupState> pickups = new List<UpgradePickupState>();
         private readonly System.Random rng = new System.Random();
-
+        private int nextBombId;
+        private int nextPickupId;
         public BombSimulation(GridMap gridMap)
         {
             grid = gridMap;
         }
-
         public IReadOnlyList<BombState> Bombs
         {
             get { return bombs; }
         }
-
         public IReadOnlyList<ExplosionCellState> Explosions
         {
             get { return explosions; }
         }
-
         public IReadOnlyList<UpgradePickupState> Pickups
         {
             get { return pickups; }
         }
-
         public bool TryPlaceBomb(int ownerId, Vector2Int cell, int range, int maxBombsForOwner)
         {
             if (!grid.InBounds(cell.x, cell.y) || grid.IsSolid(cell.x, cell.y))
@@ -50,24 +47,26 @@ namespace BombIt.Simulation
             {
                 if (existing.ownerId == ownerId)
                 {
-                    ownerBombCount++;
+                    ++ownerBombCount;
                 }
             }
             if (ownerBombCount >= maxBombsForOwner)
             {
                 return false;
             }
-            bombs.Add(new BombState
+            var bomb = new BombState
             {
+                id = nextBombId,
                 ownerId = ownerId,
                 cell = cell,
                 range = range,
                 fuseRemaining = BombConstants.fuseDuration,
                 ownerStillOnCell = true
-            });
+            };
+            ++nextBombId;
+            bombs.Add(bomb);
             return true;
         }
-
         public bool IsCellBlockedForPlayer(Vector2Int cell, int playerId)
         {
             foreach (var bomb in bombs)
@@ -84,7 +83,6 @@ namespace BombIt.Simulation
             }
             return false;
         }
-
         public bool Tick(float deltaTime, IReadOnlyList<PlayerState> players)
         {
             bool gridChanged = false;
@@ -104,7 +102,6 @@ namespace BombIt.Simulation
                     bomb.ownerStillOnCell = false;
                 }
             }
-
             var toExplode = new Queue<BombState>();
             var queuedSet = new HashSet<BombState>();
             foreach (var bomb in bombs)
@@ -165,7 +162,6 @@ namespace BombIt.Simulation
             CollectPickups(players);
             return gridChanged;
         }
-
         private void CollectPickups(IReadOnlyList<PlayerState> players)
         {
             for (int i = pickups.Count - 1; i >= 0; --i)
@@ -187,7 +183,6 @@ namespace BombIt.Simulation
                 }
             }
         }
-
         private static void ApplyUpgrade(PlayerState player, UpgradeType type)
         {
             switch (type)
@@ -201,11 +196,8 @@ namespace BombIt.Simulation
                 case UpgradeType.Speed:
                     player.speedLevel = Mathf.Min(player.speedLevel + 1, PlayerConstants.maxUpgradeLevel);
                     break;
-                default:
-                    break;
             }
         }
-
         private void TryDropUpgrade(Vector2Int cell)
         {
             if (rng.NextDouble() >= BombConstants.upgradeDropChance)
@@ -214,13 +206,9 @@ namespace BombIt.Simulation
             }
             var values = System.Enum.GetValues(typeof(UpgradeType));
             var type = (UpgradeType)values.GetValue(rng.Next(values.Length));
-            pickups.Add(new UpgradePickupState
-            {
-                cell = cell,
-                type = type
-            });
+            pickups.Add(new UpgradePickupState { id = nextPickupId, cell = cell, type = type });
+            ++nextPickupId;
         }
-
         private static bool PositionOverlapsCell(Vector2 position, float radius, Vector2Int cell)
         {
             float cellMinX = cell.x * GridMap.cellSize;
@@ -231,7 +219,6 @@ namespace BombIt.Simulation
             bool overlapsY = position.y + radius > cellMinY && position.y - radius < cellMaxY;
             return overlapsX && overlapsY;
         }
-
         private static PlayerState FindPlayer(IReadOnlyList<PlayerState> players, int id)
         {
             foreach (var player in players)
@@ -243,7 +230,6 @@ namespace BombIt.Simulation
             }
             return null;
         }
-
         private void AddOrRefreshExplosion(Vector2Int cell)
         {
             foreach (var explosion in explosions)
@@ -254,13 +240,8 @@ namespace BombIt.Simulation
                     return;
                 }
             }
-            explosions.Add(new ExplosionCellState
-            {
-                cell = cell,
-                remaining = BombConstants.explosionDuration
-            });
+            explosions.Add(new ExplosionCellState { cell = cell, remaining = BombConstants.explosionDuration });
         }
-
         private List<Vector2Int> ComputeExplosionCells(Vector2Int origin, int range, ref bool gridChanged)
         {
             var result = new List<Vector2Int> { origin };

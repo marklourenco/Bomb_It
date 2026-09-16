@@ -4,6 +4,7 @@ namespace BombIt.Simulation
 {
     public class UpgradePickupState
     {
+        public int id;
         public Vector2Int cell;
         public UpgradeType type;
     }

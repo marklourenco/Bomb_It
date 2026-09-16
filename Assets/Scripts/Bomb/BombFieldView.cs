@@ -12,26 +12,24 @@ namespace BombIt.Presentation
         [SerializeField] private Color bombCountUpgradeColor = new Color(0.2f, 0.6f, 0.9f);
         [SerializeField] private Color speedUpgradeColor = new Color(0.9f, 0.85f, 0.2f);
         private const int spritePixelSize = 32;
-        private readonly Dictionary<BombState, GameObject> bombVisuals = new Dictionary<BombState, GameObject>();
-        private readonly Dictionary<ExplosionCellState, GameObject> explosionVisuals = new Dictionary<ExplosionCellState, GameObject>();
-        private readonly Dictionary<UpgradePickupState, GameObject> pickupVisuals = new Dictionary<UpgradePickupState, GameObject>();
-
-        public void Sync(BombSimulation simulation)
+        private readonly Dictionary<int, GameObject> bombVisuals = new Dictionary<int, GameObject>();
+        private readonly Dictionary<Vector2Int, GameObject> explosionVisuals = new Dictionary<Vector2Int, GameObject>();
+        private readonly Dictionary<int, GameObject> pickupVisuals = new Dictionary<int, GameObject>();
+        public void Sync(IReadOnlyList<BombState> bombs, IReadOnlyList<ExplosionCellState> explosions, IReadOnlyList<UpgradePickupState> pickups)
         {
-            SyncBombs(simulation.Bombs);
-            SyncExplosions(simulation.Explosions);
-            SyncPickups(simulation.Pickups);
+            SyncBombs(bombs);
+            SyncExplosions(explosions);
+            SyncPickups(pickups);
         }
-
         private void SyncBombs(IReadOnlyList<BombState> bombs)
         {
-            var toRemove = new List<BombState>();
+            var toRemove = new List<int>();
             foreach (var pair in bombVisuals)
             {
                 bool stillExists = false;
                 foreach (var bomb in bombs)
                 {
-                    if (bomb == pair.Key)
+                    if (bomb.id == pair.Key)
                     {
                         stillExists = true;
                         break;
@@ -42,14 +40,14 @@ namespace BombIt.Presentation
                     toRemove.Add(pair.Key);
                 }
             }
-            foreach (var bomb in toRemove)
+            foreach (var id in toRemove)
             {
-                Destroy(bombVisuals[bomb]);
-                bombVisuals.Remove(bomb);
+                Destroy(bombVisuals[id]);
+                bombVisuals.Remove(id);
             }
             foreach (var bomb in bombs)
             {
-                if (!bombVisuals.ContainsKey(bomb))
+                if (!bombVisuals.ContainsKey(bomb.id))
                 {
                     var go = new GameObject("Bomb");
                     go.transform.SetParent(transform, false);
@@ -59,19 +57,19 @@ namespace BombIt.Presentation
                     sr.sprite = PlaceholderSprite.CreateSolid(spritePixelSize);
                     sr.color = bombColor;
                     sr.sortingOrder = 1;
-                    bombVisuals.Add(bomb, go);
+                    bombVisuals.Add(bomb.id, go);
                 }
             }
         }
         private void SyncExplosions(IReadOnlyList<ExplosionCellState> explosions)
         {
-            var toRemove = new List<ExplosionCellState>();
+            var toRemove = new List<Vector2Int>();
             foreach (var pair in explosionVisuals)
             {
                 bool stillExists = false;
                 foreach (var explosion in explosions)
                 {
-                    if (explosion == pair.Key)
+                    if (explosion.cell == pair.Key)
                     {
                         stillExists = true;
                         break;
@@ -82,14 +80,14 @@ namespace BombIt.Presentation
                     toRemove.Add(pair.Key);
                 }
             }
-            foreach (var explosion in toRemove)
+            foreach (var cell in toRemove)
             {
-                Destroy(explosionVisuals[explosion]);
-                explosionVisuals.Remove(explosion);
+                Destroy(explosionVisuals[cell]);
+                explosionVisuals.Remove(cell);
             }
             foreach (var explosion in explosions)
             {
-                if (!explosionVisuals.ContainsKey(explosion))
+                if (!explosionVisuals.ContainsKey(explosion.cell))
                 {
                     var go = new GameObject("Explosion");
                     go.transform.SetParent(transform, false);
@@ -99,20 +97,19 @@ namespace BombIt.Presentation
                     sr.sprite = PlaceholderSprite.CreateSolid(spritePixelSize);
                     sr.color = explosionColor;
                     sr.sortingOrder = 2;
-                    explosionVisuals.Add(explosion, go);
+                    explosionVisuals.Add(explosion.cell, go);
                 }
             }
         }
-
         private void SyncPickups(IReadOnlyList<UpgradePickupState> pickups)
         {
-            var toRemove = new List<UpgradePickupState>();
+            var toRemove = new List<int>();
             foreach (var pair in pickupVisuals)
             {
                 bool stillExists = false;
                 foreach (var pickup in pickups)
                 {
-                    if (pickup == pair.Key)
+                    if (pickup.id == pair.Key)
                     {
                         stillExists = true;
                         break;
@@ -123,14 +120,14 @@ namespace BombIt.Presentation
                     toRemove.Add(pair.Key);
                 }
             }
-            foreach (var pickup in toRemove)
+            foreach (var id in toRemove)
             {
-                Destroy(pickupVisuals[pickup]);
-                pickupVisuals.Remove(pickup);
+                Destroy(pickupVisuals[id]);
+                pickupVisuals.Remove(id);
             }
             foreach (var pickup in pickups)
             {
-                if (!pickupVisuals.ContainsKey(pickup))
+                if (!pickupVisuals.ContainsKey(pickup.id))
                 {
                     var go = new GameObject($"Upgrade_{pickup.type}");
                     go.transform.SetParent(transform, false);
@@ -140,11 +137,10 @@ namespace BombIt.Presentation
                     sr.sprite = PlaceholderSprite.CreateSolid(spritePixelSize);
                     sr.color = ColorForUpgrade(pickup.type);
                     sr.sortingOrder = 1;
-                    pickupVisuals.Add(pickup, go);
+                    pickupVisuals.Add(pickup.id, go);
                 }
             }
         }
-
         private Color ColorForUpgrade(UpgradeType type)
         {
             switch (type)
