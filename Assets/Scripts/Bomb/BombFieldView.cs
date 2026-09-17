@@ -6,12 +6,6 @@ namespace BombIt.Presentation
 {
     public class BombFieldView : MonoBehaviour
     {
-        [SerializeField] private Color bombColor = new Color(0.1f, 0.1f, 0.1f);
-        [SerializeField] private Color explosionColor = new Color(1.0f, 0.5f, 0.1f);
-        [SerializeField] private Color rangeUpgradeColor = new Color(0.9f, 0.2f, 0.2f);
-        [SerializeField] private Color bombCountUpgradeColor = new Color(0.2f, 0.6f, 0.9f);
-        [SerializeField] private Color speedUpgradeColor = new Color(0.9f, 0.85f, 0.2f);
-        private const int spritePixelSize = 32;
         private readonly Dictionary<int, GameObject> bombVisuals = new Dictionary<int, GameObject>();
         private readonly Dictionary<Vector2Int, GameObject> explosionVisuals = new Dictionary<Vector2Int, GameObject>();
         private readonly Dictionary<int, GameObject> pickupVisuals = new Dictionary<int, GameObject>();
@@ -52,10 +46,10 @@ namespace BombIt.Presentation
                     var go = new GameObject("Bomb");
                     go.transform.SetParent(transform, false);
                     go.transform.position = GridMap.GridToWorldCenter(bomb.cell.x, bomb.cell.y);
-                    go.transform.localScale = new Vector3(0.6f, 0.6f, 1.0f);
+                    go.transform.localScale = new Vector3(0.8f, 0.8f, 1.0f);
                     var sr = go.AddComponent<SpriteRenderer>();
-                    sr.sprite = PlaceholderSprite.CreateSolid(spritePixelSize);
-                    sr.color = bombColor;
+                    sr.sprite = SpriteLibrary.GetBomb();
+                    sr.color = Color.white;
                     sr.sortingOrder = 1;
                     bombVisuals.Add(bomb.id, go);
                 }
@@ -94,8 +88,8 @@ namespace BombIt.Presentation
                     go.transform.position = GridMap.GridToWorldCenter(explosion.cell.x, explosion.cell.y);
                     go.transform.localScale = new Vector3(GridMap.cellSize, GridMap.cellSize, 1.0f);
                     var sr = go.AddComponent<SpriteRenderer>();
-                    sr.sprite = PlaceholderSprite.CreateSolid(spritePixelSize);
-                    sr.color = explosionColor;
+                    sr.sprite = SpriteLibrary.GetExplosion();
+                    sr.color = Color.white;
                     sr.sortingOrder = 2;
                     explosionVisuals.Add(explosion.cell, go);
                 }
@@ -132,27 +126,13 @@ namespace BombIt.Presentation
                     var go = new GameObject($"Upgrade_{pickup.type}");
                     go.transform.SetParent(transform, false);
                     go.transform.position = GridMap.GridToWorldCenter(pickup.cell.x, pickup.cell.y);
-                    go.transform.localScale = new Vector3(0.5f, 0.5f, 1.0f);
+                    go.transform.localScale = new Vector3(0.6f, 0.6f, 1.0f);
                     var sr = go.AddComponent<SpriteRenderer>();
-                    sr.sprite = PlaceholderSprite.CreateSolid(spritePixelSize);
-                    sr.color = ColorForUpgrade(pickup.type);
+                    sr.sprite = SpriteLibrary.GetUpgrade(pickup.type);
+                    sr.color = Color.white;
                     sr.sortingOrder = 1;
                     pickupVisuals.Add(pickup.id, go);
                 }
-            }
-        }
-        private Color ColorForUpgrade(UpgradeType type)
-        {
-            switch (type)
-            {
-                case UpgradeType.Range:
-                    return rangeUpgradeColor;
-                case UpgradeType.BombCount:
-                    return bombCountUpgradeColor;
-                case UpgradeType.Speed:
-                    return speedUpgradeColor;
-                default:
-                    return Color.white;
             }
         }
     }

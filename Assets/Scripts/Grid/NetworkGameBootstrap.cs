@@ -1,10 +1,10 @@
-using BombIt.Networking;
-using BombIt.Presentation;
-using BombIt.Simulation;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using UnityEngine;
+using BombIt.Simulation;
+using BombIt.Presentation;
+using BombIt.Networking;
 
 public class NetworkGameBootstrap : MonoBehaviour
 {
@@ -16,7 +16,7 @@ public class NetworkGameBootstrap : MonoBehaviour
     }
     [Range(0.0f, 1.0f)]
     [SerializeField] private float boxDensity = 0.6f;
-    [Tooltip("-1 = random seed each run. any other value produces the same layout")]
+    [Tooltip("Default seed used if the lobby's seed field is left blank. -1 = random seed each run, any other value produces the same layout")]
     [SerializeField] private int seed = -1;
     [SerializeField] private float collisionRadius = 0.35f;
     private Role role = Role.None;
@@ -35,13 +35,22 @@ public class NetworkGameBootstrap : MonoBehaviour
     private PlayerInputState localInput;
     private int localBombRequestCount;
     private LobbyUI lobbyUI;
+    private bool gameStarted;
+    private bool gameOver;
+    private int winnerId = -1;
+    private bool clientGameStarted;
+    private bool clientGameOver;
+    private int clientWinnerId = -1;
     void Start()
     {
+        SetCameraBackground();
         var lobbyGO = new GameObject("Lobby UI");
         lobbyUI = lobbyGO.AddComponent<LobbyUI>();
         lobbyUI.OnStartHostClicked = HandleStartHostRequested;
         lobbyUI.OnConnectClicked = HandleConnectRequested;
         lobbyUI.OnStopClicked = HandleStopRequested;
+        lobbyUI.OnStartGameClicked = HandleStartGameRequested;
+        lobbyUI.OnPlayAgainClicked = HandlePlayAgainRequested;
         lobbyUI.Build();
     }
     void Update()
@@ -61,9 +70,10 @@ public class NetworkGameBootstrap : MonoBehaviour
             ReadLocalInput();
         }
     }
-    private void HandleStartHostRequested(int port)
+    private void HandleStartHostRequested(int port, int requestedSeed)
     {
         hostPort = port;
+        seed = requestedSeed;
         StartHosting();
     }
     private void HandleConnectRequested(string address, int port)
@@ -84,6 +94,24 @@ public class NetworkGameBootstrap : MonoBehaviour
         }
         lobbyUI.ShowLobby();
     }
+    private void HandleStartGameRequested()
+    {
+        if (role == Role.Host)
+        {
+            gameStarted = true;
+        }
+    }
+    private void HandlePlayAgainRequested()
+    {
+        if (role == Role.Host && gameOver)
+        {
+            RestartRound();
+        }
+    }
+    private static string BuildGameOverMessage(int winner)
+    {
+        return winner >= 0 ? $"Player {winner} wins!" : "It's a draw!";
+    }
     private void UpdateHostStatusUI()
     {
         var peerList = new System.Text.StringBuilder();
@@ -92,7 +120,16 @@ public class NetworkGameBootstrap : MonoBehaviour
             peerList.AppendLine($"Player {peer.playerId}  -  {peer.state}");
         }
         var status = $"Hosting on port {hostPort}. You are player 0.\nLocal network address: {GetLocalIPAddress()}:{hostPort}";
-        lobbyUI.ShowStatus(status, peerList.ToString());
+        status += gameStarted ? "\nGame in progress." : "\nWaiting to start - press Start once everyone has joined.";
+        lobbyUI.ShowStatus(status, peerList.ToString(), !gameStarted && !gameOver);
+        if (gameOver)
+        {
+            lobbyUI.ShowGameOver(BuildGameOverMessage(winnerId), true);
+        }
+        else
+        {
+            lobbyUI.HideGameOver();
+        }
     }
     private void UpdateClientStatusUI()
     {
@@ -100,12 +137,21 @@ public class NetworkGameBootstrap : MonoBehaviour
         if (client.State == PeerState.Connected)
         {
             status += $"\nConnected as player {client.LocalPlayerId}";
+            status += clientGameStarted ? "\nGame in progress." : "\nWaiting for host to start the game...";
         }
         if (client.WasRejected)
         {
             status += "\nConnection was rejected (host may be full).";
         }
-        lobbyUI.ShowStatus(status, "");
+        lobbyUI.ShowStatus(status, "", false);
+        if (clientGameOver)
+        {
+            lobbyUI.ShowGameOver(BuildGameOverMessage(clientWinnerId), false);
+        }
+        else
+        {
+            lobbyUI.HideGameOver();
+        }
     }
     void FixedUpdate()
     {
@@ -133,7 +179,7 @@ public class NetworkGameBootstrap : MonoBehaviour
             bombRequestCount = localBombRequestCount
         };
     }
-    // --- Host ---
+    // host
     private void StartHosting()
     {
         grid = new GridMap();
@@ -144,6 +190,9 @@ public class NetworkGameBootstrap : MonoBehaviour
         players.Add(CreatePlayerState(0));
         lastProcessedBombRequestCount.Clear();
         localBombRequestCount = 0;
+        gameStarted = false;
+        gameOver = false;
+        winnerId = -1;
         host = new GameHost();
         host.Start(hostPort);
         role = Role.Host;
@@ -155,32 +204,84 @@ public class NetworkGameBootstrap : MonoBehaviour
         host = null;
         CleanupPresentation();
         players.Clear();
+        gameStarted = false;
+        gameOver = false;
+        winnerId = -1;
         role = Role.None;
+    }
+    private void RestartRound()
+    {
+        grid.GenerateClassicLayout(boxDensity, seed >= 0 ? seed : (int?)null);
+        gridView.Refresh(grid);
+        bombSimulation = new BombSimulation(grid);
+        bombFieldView.Sync(bombSimulation.Bombs, bombSimulation.Explosions, bombSimulation.Pickups);
+        lastProcessedBombRequestCount.Clear();
+        foreach (var player in players)
+        {
+            player.position = GetSpawnPosition(player.id);
+            player.alive = true;
+            player.rangeLevel = 0;
+            player.bombCountLevel = 0;
+            player.speedLevel = 0;
+            var view = GetOrCreatePlayerView(player.id);
+            view.SyncTo(player);
+            view.SetAlive();
+        }
+        gameOver = false;
+        winnerId = -1;
+        gameStarted = false;
     }
     private void HostTick(float deltaTime)
     {
         ReconcilePlayers();
-        var hostPlayer = FindPlayer(0);
-        if (hostPlayer != null)
+        bool gridChanged = false;
+        if (gameStarted && !gameOver)
         {
-            ApplyInputToPlayer(hostPlayer, localInput, deltaTime);
+            var hostPlayer = FindPlayer(0);
+            if (hostPlayer != null)
+            {
+                ApplyInputToPlayer(hostPlayer, localInput, deltaTime);
+            }
+            foreach (var player in players)
+            {
+                if (player.id == 0)
+                {
+                    continue;
+                }
+                PlayerInputState input;
+                if (host.TryGetLatestInput(player.id, out input))
+                {
+                    ApplyInputToPlayer(player, input, deltaTime);
+                }
+            }
+            gridChanged = bombSimulation.Tick(deltaTime, players);
+            CheckWinCondition();
         }
+        SyncHostPresentation(gridChanged);
+        var snapshot = StateSnapshot.Write(grid, players, bombSimulation, gameStarted, gameOver, winnerId);
+        host.SendToAll(snapshot, PacketChannel.Unreliable);
+    }
+    private void CheckWinCondition()
+    {
+        if (players.Count < 2)
+        {
+            return;
+        }
+        int aliveCount = 0;
+        int lastAliveId = -1;
         foreach (var player in players)
         {
-            if (player.id == 0)
+            if (player.alive)
             {
-                continue;
-            }
-            PlayerInputState input;
-            if (host.TryGetLatestInput(player.id, out input))
-            {
-                ApplyInputToPlayer(player, input, deltaTime);
+                ++aliveCount;
+                lastAliveId = player.id;
             }
         }
-        bool gridChanged = bombSimulation.Tick(deltaTime, players);
-        SyncHostPresentation(gridChanged);
-        var snapshot = StateSnapshot.Write(grid, players, bombSimulation);
-        host.SendToAll(snapshot, PacketChannel.Unreliable);
+        if (aliveCount <= 1)
+        {
+            gameOver = true;
+            winnerId = aliveCount == 1 ? lastAliveId : -1;
+        }
     }
     private void ApplyInputToPlayer(PlayerState player, PlayerInputState input, float deltaTime)
     {
@@ -191,8 +292,8 @@ public class NetworkGameBootstrap : MonoBehaviour
         var direction = new Vector2(input.moveX, input.moveY);
         PlayerMotor.Move(player, grid, bombSimulation, direction, deltaTime);
         int lastCount;
-        lastProcessedBombRequestCount.TryGetValue(player.id, out lastCount);
-        if (input.bombRequestCount > lastCount)
+        bool hasBaseline = lastProcessedBombRequestCount.TryGetValue(player.id, out lastCount);
+        if (hasBaseline && input.bombRequestCount > lastCount)
         {
             var cell = GridMap.WorldToGrid(player.position);
             bombSimulation.TryPlaceBomb(player.id, cell, player.GetBombRange(), player.GetMaxBombs());
@@ -249,12 +350,15 @@ public class NetworkGameBootstrap : MonoBehaviour
             }
         }
     }
-    // --- Client ---
+    // client
     private void StartAsClient()
     {
         grid = new GridMap();
         BuildSharedPresentation();
         localBombRequestCount = 0;
+        clientGameStarted = false;
+        clientGameOver = false;
+        clientWinnerId = -1;
         client = new GameClient();
         client.Connect(clientAddressInput, int.Parse(clientPortInput), 0);
         role = Role.Client;
@@ -282,6 +386,9 @@ public class NetworkGameBootstrap : MonoBehaviour
         {
             return;
         }
+        clientGameStarted = snapshot.gameStarted;
+        clientGameOver = snapshot.gameOver;
+        clientWinnerId = snapshot.winnerId;
         ApplyGridCells(snapshot.gridCells);
         var seenPlayerIds = new HashSet<int>();
         foreach (var playerData in snapshot.players)
@@ -348,7 +455,7 @@ public class NetworkGameBootstrap : MonoBehaviour
         }
         gridView.Refresh(grid);
     }
-    // --- Shared helpers ---
+    // helpers
     private Vector2 GetSpawnPosition(int playerId)
     {
         switch (playerId)
@@ -394,7 +501,7 @@ public class NetworkGameBootstrap : MonoBehaviour
         }
         var go = new GameObject($"Player_{playerId}");
         view = go.AddComponent<PlayerView>();
-        view.Build(collisionRadius * 2.0f);
+        view.Build(collisionRadius * 2.0f, playerId);
         playerViews.Add(playerId, view);
         return view;
     }
@@ -447,6 +554,16 @@ public class NetworkGameBootstrap : MonoBehaviour
             Destroy(bombFieldView.gameObject);
             bombFieldView = null;
         }
+    }
+    private void SetCameraBackground()
+    {
+        var cam = Camera.main;
+        if (cam == null)
+        {
+            return;
+        }
+        cam.clearFlags = CameraClearFlags.SolidColor;
+        cam.backgroundColor = Color.black;
     }
     private void FitCameraToGrid()
     {

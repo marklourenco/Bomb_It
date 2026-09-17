@@ -39,6 +39,9 @@ namespace BombIt.Networking
     public class SnapshotData
     {
         public CellContent[] gridCells;
+        public bool gameStarted;
+        public bool gameOver;
+        public int winnerId;
         public readonly List<SnapshotPlayerData> players = new List<SnapshotPlayerData>();
         public readonly List<SnapshotBombData> bombs = new List<SnapshotBombData>();
         public readonly List<SnapshotExplosionData> explosions = new List<SnapshotExplosionData>();
@@ -46,10 +49,13 @@ namespace BombIt.Networking
     }
     public static class StateSnapshot
     {
-        public static byte[] Write(GridMap grid, IReadOnlyList<PlayerState> players, BombSimulation bombSimulation)
+        public static byte[] Write(GridMap grid, IReadOnlyList<PlayerState> players, BombSimulation bombSimulation, bool gameStarted, bool gameOver, int winnerId)
         {
             var writer = new PacketWriter();
             writer.WriteByte((byte)MessageType.StateSnapshot);
+            writer.WriteByte((byte)(gameStarted ? 1 : 0));
+            writer.WriteByte((byte)(gameOver ? 1 : 0));
+            writer.WriteByte((byte)(winnerId + 1));
             for (int y = 0; y < GridMap.height; ++y)
             {
                 for (int x = 0; x < GridMap.width; ++x)
@@ -98,6 +104,9 @@ namespace BombIt.Networking
         public static SnapshotData Read(PacketReader reader)
         {
             var data = new SnapshotData();
+            data.gameStarted = reader.ReadByte() != 0;
+            data.gameOver = reader.ReadByte() != 0;
+            data.winnerId = reader.ReadByte() - 1;
             data.gridCells = new CellContent[GridMap.width * GridMap.height];
             for (int y = 0; y < GridMap.height; ++y)
             {

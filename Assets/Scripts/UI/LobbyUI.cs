@@ -6,16 +6,23 @@ using UnityEngine.UI;
 
 public class LobbyUI : MonoBehaviour
 {
-    public Action<int> OnStartHostClicked;
+    public Action<int, int> OnStartHostClicked;
     public Action<string, int> OnConnectClicked;
     public Action OnStopClicked;
+    public Action OnStartGameClicked;
+    public Action OnPlayAgainClicked;
     private GameObject lobbyPanel;
     private GameObject statusPanel;
+    private GameObject gameOverPanel;
     private InputField hostPortField;
+    private InputField seedField;
     private InputField addressField;
     private InputField joinPortField;
     private Text statusText;
     private Text peerListText;
+    private Text gameOverText;
+    private Button startGameButton;
+    private Button playAgainButton;
     public void Build()
     {
         EnsureEventSystem();
@@ -26,32 +33,50 @@ public class LobbyUI : MonoBehaviour
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1280, 720);
         canvasGO.AddComponent<GraphicRaycaster>();
-        lobbyPanel = CreatePanel(canvasGO.transform, "Lobby Panel");
+        lobbyPanel = CreatePanel(canvasGO.transform, "Lobby Panel", true);
         CreateLabel(lobbyPanel.transform, "Bomb It", 32);
         CreateLabel(lobbyPanel.transform, "Host a game", 20);
-        hostPortField = CreateInputField(lobbyPanel.transform, "Port", "7777");
+        hostPortField = CreateInputField(lobbyPanel.transform, "Port", "6767");
+        seedField = CreateInputField(lobbyPanel.transform, "Seed (blank = random)", "");
         CreateButton(lobbyPanel.transform, "Start Host", HandleStartHostClicked);
         CreateLabel(lobbyPanel.transform, "Join a game", 20);
         addressField = CreateInputField(lobbyPanel.transform, "Host address", "127.0.0.1");
-        joinPortField = CreateInputField(lobbyPanel.transform, "Port", "7777");
+        joinPortField = CreateInputField(lobbyPanel.transform, "Port", "6767");
         CreateButton(lobbyPanel.transform, "Connect", HandleConnectClicked);
-        statusPanel = CreatePanel(canvasGO.transform, "Status Panel");
-        statusText = CreateLabel(statusPanel.transform, "", 20);
-        peerListText = CreateLabel(statusPanel.transform, "", 16);
+        statusPanel = CreatePanel(canvasGO.transform, "Status Panel", false);
+        statusText = CreateLabel(statusPanel.transform, "", 18);
+        peerListText = CreateLabel(statusPanel.transform, "", 14);
+        startGameButton = CreateButton(statusPanel.transform, "Start Game", HandleStartGameClicked);
         CreateButton(statusPanel.transform, "Stop / Disconnect", HandleStopClicked);
         statusPanel.SetActive(false);
+        gameOverPanel = CreatePanel(canvasGO.transform, "Game Over Panel", true);
+        gameOverText = CreateLabel(gameOverPanel.transform, "", 28);
+        playAgainButton = CreateButton(gameOverPanel.transform, "Play Again", HandlePlayAgainClicked);
+        gameOverPanel.SetActive(false);
     }
     public void ShowLobby()
     {
         lobbyPanel.SetActive(true);
         statusPanel.SetActive(false);
+        gameOverPanel.SetActive(false);
     }
-    public void ShowStatus(string status, string peerList)
+    public void ShowStatus(string status, string peerList, bool showStartButton)
     {
         lobbyPanel.SetActive(false);
         statusPanel.SetActive(true);
         statusText.text = status;
         peerListText.text = peerList;
+        startGameButton.gameObject.SetActive(showStartButton);
+    }
+    public void ShowGameOver(string message, bool showPlayAgainButton)
+    {
+        gameOverPanel.SetActive(true);
+        gameOverText.text = message;
+        playAgainButton.gameObject.SetActive(showPlayAgainButton);
+    }
+    public void HideGameOver()
+    {
+        gameOverPanel.SetActive(false);
     }
     private void HandleStartHostClicked()
     {
@@ -60,9 +85,14 @@ public class LobbyUI : MonoBehaviour
         {
             port = NetworkConstants.defaultPort;
         }
+        int seed;
+        if (!int.TryParse(seedField.text, out seed))
+        {
+            seed = -1;
+        }
         if (OnStartHostClicked != null)
         {
-            OnStartHostClicked(port);
+            OnStartHostClicked(port, seed);
         }
     }
     private void HandleConnectClicked()
@@ -84,6 +114,20 @@ public class LobbyUI : MonoBehaviour
             OnStopClicked();
         }
     }
+    private void HandleStartGameClicked()
+    {
+        if (OnStartGameClicked != null)
+        {
+            OnStartGameClicked();
+        }
+    }
+    private void HandlePlayAgainClicked()
+    {
+        if (OnPlayAgainClicked != null)
+        {
+            OnPlayAgainClicked();
+        }
+    }
     private void EnsureEventSystem()
     {
         if (FindObjectOfType<EventSystem>() == null)
@@ -93,21 +137,32 @@ public class LobbyUI : MonoBehaviour
             go.AddComponent<StandaloneInputModule>();
         }
     }
-    private GameObject CreatePanel(Transform parent, string name)
+    private GameObject CreatePanel(Transform parent, string name, bool centered)
     {
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
         var rect = go.AddComponent<RectTransform>();
-        rect.anchorMin = new Vector2(0.5f, 0.5f);
-        rect.anchorMax = new Vector2(0.5f, 0.5f);
-        rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.sizeDelta = new Vector2(420, 400);
-        rect.anchoredPosition = Vector2.zero;
+        if (centered)
+        {
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = new Vector2(420, 400);
+            rect.anchoredPosition = Vector2.zero;
+        }
+        else
+        {
+            rect.anchorMin = new Vector2(0.0f, 0.5f);
+            rect.anchorMax = new Vector2(0.0f, 0.5f);
+            rect.pivot = new Vector2(0.0f, 0.5f);
+            rect.sizeDelta = new Vector2(300, 400);
+            rect.anchoredPosition = new Vector2(16, 0);
+        }
         var image = go.AddComponent<Image>();
         image.color = new Color(0.0f, 0.0f, 0.0f, 0.75f);
         var layout = go.AddComponent<VerticalLayoutGroup>();
-        layout.padding = new RectOffset(24, 24, 24, 24);
-        layout.spacing = 12;
+        layout.padding = new RectOffset(20, 20, 20, 20);
+        layout.spacing = 10;
         layout.childAlignment = TextAnchor.UpperCenter;
         layout.childControlWidth = true;
         layout.childControlHeight = true;
@@ -123,13 +178,15 @@ public class LobbyUI : MonoBehaviour
         go.transform.SetParent(parent, false);
         go.AddComponent<RectTransform>();
         var layoutElement = go.AddComponent<LayoutElement>();
-        layoutElement.preferredHeight = fontSize + 10;
+        layoutElement.minHeight = fontSize + 10;
         var label = go.AddComponent<Text>();
         label.text = labelText;
         label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         label.fontSize = fontSize;
         label.alignment = TextAnchor.MiddleCenter;
         label.color = Color.white;
+        label.horizontalOverflow = HorizontalWrapMode.Wrap;
+        label.verticalOverflow = VerticalWrapMode.Overflow;
         return label;
     }
     private InputField CreateInputField(Transform parent, string placeholderText, string defaultValue)

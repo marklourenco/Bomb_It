@@ -12,7 +12,6 @@ public class PlayerController : MonoBehaviour
     private PlayerView view;
     private Vector2 inputDirection;
     private bool wasAlive = true;
-
     public void Build(GridMap gridMap, BombSimulation bombSimulation, Vector2 spawnPosition, int ownerId)
     {
         grid = gridMap;
@@ -24,15 +23,13 @@ public class PlayerController : MonoBehaviour
             collisionRadius = collisionRadius
         };
         view = gameObject.AddComponent<PlayerView>();
-        view.Build(collisionRadius * 2.0f);
+        view.Build(collisionRadius * 2.0f, ownerId);
         view.SyncTo(state);
     }
-
     public PlayerState GetState()
     {
         return state;
     }
-
     void Update()
     {
         float horizontal = Input.GetAxisRaw("Horizontal");
@@ -43,7 +40,6 @@ public class PlayerController : MonoBehaviour
             TryPlaceBomb();
         }
     }
-
     public void Tick(float deltaTime)
     {
         if (!state.alive)
@@ -58,7 +54,6 @@ public class PlayerController : MonoBehaviour
         PlayerMotor.Move(state, grid, bombs, inputDirection, deltaTime);
         view.SyncTo(state);
     }
-
     private void TryPlaceBomb()
     {
         if (!state.alive)

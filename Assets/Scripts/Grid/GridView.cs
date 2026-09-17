@@ -5,53 +5,62 @@ namespace BombIt.Presentation
 {
     public class GridView : MonoBehaviour
     {
-        [SerializeField] private Color floorColor = new Color(0.85f, 0.85f, 0.85f);
-        [SerializeField] private Color wallColor = new Color(0.25f, 0.25f, 0.25f);
-        [SerializeField] private Color boxColor = new Color(0.55f, 0.35f, 0.15f);
-
+        // The crate sprite was re-cropped in the Sprite Editor to 32x23 pixels
+        // (instead of the 32x32 every other tile uses), so on its own it would
+        // only cover part of a cell's height. Stretching it by this factor makes
+        // it fill the full cell height again.
+        private const float boxSpritePixelWidth = 32.0f;
+        private const float boxSpritePixelHeight = 23.0f;
+        private const float boxHeightStretch = boxSpritePixelWidth / boxSpritePixelHeight;
         private SpriteRenderer[,] tileRenderers;
-        private Sprite pixelSprite;
-
         public void Build(GridMap grid)
         {
-            pixelSprite = PlaceholderSprite.CreateSolid(spritePixelSize);
             tileRenderers = new SpriteRenderer[GridMap.width, GridMap.height];
-
             for (int x = 0; x < GridMap.width; ++x)
             {
                 for (int y = 0; y < GridMap.height; ++y)
                 {
                     var go = new GameObject($"Tile_{x}_{y}");
                     go.transform.SetParent(transform, false);
-                    go.transform.position = GridMap.GridToWorldCenter(x, y);
-                    go.transform.localScale = new Vector3(GridMap.cellSize, GridMap.cellSize, 1.0f);
-
                     var sr = go.AddComponent<SpriteRenderer>();
-                    sr.sprite = pixelSprite;
-                    sr.sortingOrder = -10;
                     tileRenderers[x, y] = sr;
                 }
             }
-
             Refresh(grid);
         }
-
         public void Refresh(GridMap grid)
         {
             for (int x = 0; x < GridMap.width; ++x)
             {
                 for (int y = 0; y < GridMap.height; ++y)
                 {
-                    tileRenderers[x, y].color = grid.GetCell(x, y) switch
+                    var content = grid.GetCell(x, y);
+                    var sr = tileRenderers[x, y];
+                    var center = GridMap.GridToWorldCenter(x, y);
+                    switch (content)
                     {
-                        CellContent.Wall => wallColor,
-                        CellContent.Box => boxColor,
-                        _ => floorColor
-                    };
+                        case CellContent.Wall:
+                            sr.sprite = SpriteLibrary.GetWall();
+                            sr.transform.position = center;
+                            sr.transform.localScale = new Vector3(GridMap.cellSize, GridMap.cellSize, 1.0f);
+                            sr.sortingOrder = -10;
+                            break;
+                        case CellContent.Box:
+                            sr.sprite = SpriteLibrary.GetBox();
+                            sr.transform.position = new Vector3(center.x, center.y - GridMap.cellSize * 0.5f, 0.0f);
+                            sr.transform.localScale = new Vector3(GridMap.cellSize, GridMap.cellSize * boxHeightStretch, 1.0f);
+                            sr.sortingOrder = -1;
+                            break;
+                        default:
+                            sr.sprite = SpriteLibrary.GetFloor(x, y);
+                            sr.transform.position = center;
+                            sr.transform.localScale = new Vector3(GridMap.cellSize, GridMap.cellSize, 1.0f);
+                            sr.sortingOrder = -10;
+                            break;
+                    }
+                    sr.color = Color.white;
                 }
             }
         }
-
-        private const int spritePixelSize = 32;
     }
 }
